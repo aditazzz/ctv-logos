@@ -33,12 +33,19 @@ def _load_api_key():
         return key
     # Try key file next to this script (gitignored)
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    key_file = os.path.join(script_dir, ".brandfetch_key")
-    if os.path.isfile(key_file):
-        with open(key_file) as f:
-            key = (f.readline() or "").strip()
-            if key:
-                return key
+    for key_file in [
+        os.path.join(script_dir, ".brandfetch_key"),
+        os.path.join(os.getcwd(), "logos", ".brandfetch_key"),
+        os.path.join(os.getcwd(), ".brandfetch_key"),
+    ]:
+        if os.path.isfile(key_file):
+            try:
+                with open(key_file) as f:
+                    key = (f.readline() or "").strip()
+                    if key and key != "PASTE_YOUR_KEY_HERE":
+                        return key
+            except OSError:
+                continue
     return "PASTE_YOUR_KEY_HERE"
 
 
@@ -107,56 +114,55 @@ API_KEY = _load_api_key()
 #     }
 # }
 
-# --- Only the 3 still missing (run this to append without touching existing logos) ---
-LOGOS = {
-    "Entertainment": {
-        "gemelli":       "gemellifilm.com",      # Brandfetch may not have small indie
-        "green_apple":   "greenappleent.com",   # was greenappleentertainment.com
-        "vision_films":  "visionfilms.com",     # trying .com; .net didn’t return logo
-    }
-}
-
-# --- Full list (commented out; uncomment to re-fetch all 36) ---
+# --- Only the 3 still missing (comment in to append without re-fetching all) ---
 # LOGOS = {
 #     "Entertainment": {
-#         "airbud_entertainment":   "airbudentertainment.com",
-#         "alliance_media":        "alliancemedia.com",
-#         "artist_view":           "artistviewent.com",
-#         "bayview":               "bayview.com",
-#         "bmg":                   "bmg.com",
-#         "brain_power":           "brainpowerstudio.com",
-#         "cineverse":             "cineverse.com",
-#         "dlt_entertainment":     "dltentertainment.com",
-#         "echelon":               "echelonstudios.us",
-#         "electric_entertainment": "electricentertainment.com",
-#         "epic_pictures":         "epic-pictures.com",
-#         "filmhub":               "filmhub.com",
-#         "foundation":            "foundation-distribution.com",
-#         "gemelli":               "gemellifilm.com",
-#         "giant_entertainment":   "giantpictures.com",
-#         "green_apple":           "greenappleent.com",
-#         "imagicomm":             "imagicomm.com",
-#         "indie_rights":          "indierights.com",
-#         "lionsgate":             "lionsgate.com",
-#         "monarch":               "monarch.com",
-#         "new_films_international": "newfilmsinternational.com",
-#         "nicely":                "nicely.com",
-#         "one_world_digital":     "oneworld.digital",
-#         "questar":               "questarentertainment.com",
-#         "radial_entertainment":  "radialentertainment.com",
-#         "relativity_media":      "relativitymedia.com",
-#         "shoreline":             "shorelineentertainment.com",
-#         "spi":                   "spientertainment.com",
-#         "stingray":              "stingray.com",
-#         "studio_tf1":            "tf1.fr",
-#         "tastemade":             "tastemade.com",
-#         "tesera_entertainment":  "teseraentertainment.com",
-#         "tricoast":              "tricoast.com",
-#         "video_elephant":        "videoelephant.com",
-#         "vision_films":          "visionfilms.com",
-#         "wonderphil":            "wonderphil.biz",
+#         "gemelli":       "gemellifilm.com",
+#         "green_apple":   "greenappleent.com",
+#         "vision_films":  "visionfilms.com",
 #     }
 # }
+
+LOGOS = {
+    "Entertainment": {
+        "airbud_entertainment":   "airbudentertainment.com",
+        "alliance_media":        "alliancemedia.com",
+        "artist_view":           "artistviewent.com",
+        "bayview":               "bayview.com",
+        "bmg":                   "bmg.com",
+        "brain_power":           "brainpowerstudio.com",
+        "cineverse":             "cineverse.com",
+        "dlt_entertainment":     "dltentertainment.com",
+        "echelon":               "echelonstudios.us",
+        "electric_entertainment": "electricentertainment.com",
+        "epic_pictures":         "epic-pictures.com",
+        "filmhub":               "filmhub.com",
+        "foundation":            "foundation-distribution.com",
+        "gemelli":               "gemellifilm.com",
+        "giant_entertainment":   "giantpictures.com",
+        "green_apple":           "greenappleent.com",
+        "imagicomm":             "imagicomm.com",
+        "indie_rights":          "indierights.com",
+        "lionsgate":             "lionsgate.com",
+        "monarch":               "monarch.com",
+        "new_films_international": "newfilmsinternational.com",
+        "nicely":                "nicely.com",
+        "one_world_digital":     "oneworld.digital",
+        "questar":               "questarentertainment.com",
+        "radial_entertainment":  "radialentertainment.com",
+        "relativity_media":      "relativitymedia.com",
+        "shoreline":             "shorelineentertainment.com",
+        "spi":                   "spientertainment.com",
+        "stingray":              "stingray.com",
+        "studio_tf1":            "tf1.fr",
+        "tastemade":             "tastemade.com",
+        "tesera_entertainment":  "teseraentertainment.com",
+        "tricoast":              "tricoast.com",
+        "video_elephant":        "videoelephant.com",
+        "vision_films":          "visionfilms.com",
+        "wonderphil":            "wonderphil.biz",
+    }
+}
 
 OUT = "CTV_Logos"
 MAX_SIZE = 1000   # max width/height in px (800–1000 ideal for decks)
@@ -164,14 +170,26 @@ HEADERS = {"Authorization": f"Bearer {API_KEY}"} if API_KEY else {}
 
 
 def _recolor_png(data: bytes, color: tuple) -> Optional[bytes]:
-    """Convert PNG to solid (r,g,b) on transparent; max dimension MAX_SIZE."""
+    """Convert PNG to solid (r,g,b) on transparent; max dimension MAX_SIZE.
+    Uses luminance so only the logo shape (lighter pixels) is kept; dark backgrounds become transparent (avoids black boxes).
+    """
     img = Image.open(BytesIO(data)).convert("RGBA")
     pixels = list(img.getdata())
-    visible = sum(1 for p in pixels if p[3] > 10)
+    r, g, b = color
+    new_pixels = []
+    for p in pixels:
+        pr, pg, pb, pa = p
+        # Luminance: light pixels = logo, dark = background
+        lum = int(0.299 * pr + 0.587 * pg + 0.114 * pb)
+        if pa > 10 and lum > 25:
+            # Keep logo shape: scale alpha by luminance so edges are soft
+            new_a = min(255, int(pa * (lum / 255)))
+            new_pixels.append((r, g, b, new_a))
+        else:
+            new_pixels.append((0, 0, 0, 0))
+    visible = sum(1 for p in new_pixels if p[3] > 10)
     if visible < len(pixels) * 0.005:
         return None
-    r, g, b = color
-    new_pixels = [(r, g, b, p[3]) if p[3] > 10 else (0, 0, 0, 0) for p in pixels]
     img.putdata(new_pixels)
     img.thumbnail((MAX_SIZE, MAX_SIZE))
     buf = BytesIO()
@@ -282,7 +300,7 @@ def fetch_logo(domain: str):
 
 
 def main():
-    if not API_KEY or API_KEY == "pdXQxPHyfTLTdQ_qSXbn9gDKLymfCLAx_rPrikr0k9hgIz4-hw9nD49Qq4WIMiW9-ACEM8ao-6bxdA4NaZQ4ng":
+    if not API_KEY or API_KEY == "PASTE_YOUR_KEY_HERE":
         print("No API key found. Use one of:")
         print("  1. export BRANDFETCH_API_KEY='your_key'")
         print("  2. Put your key in logos/.brandfetch_key (one line, no quotes)")
