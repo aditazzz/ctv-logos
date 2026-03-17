@@ -99,10 +99,10 @@ API_KEY = _load_api_key()
 #         "foundation":            "foundation-distribution.com",
 #         "gemelli":               "gemellifilm.com",
 #         "giant_entertainment":   "giantpictures.com",
-#         "green_apple":           "greenappleentertainment.com",
+#         "green_apple":           "greenappleent.com",
 #         "one_world_digital":     "oneworld.digital",
 #         "questar":               "questarentertainment.com",
-#         "vision_films":          "visionfilms.net",
+#         "vision_films":          "visionfilms.com",
 #         "wonderphil":            "wonderphil.biz",
 #     }
 # }
@@ -110,9 +110,9 @@ API_KEY = _load_api_key()
 # --- Only the 3 still missing (run this to append without touching existing logos) ---
 LOGOS = {
     "Entertainment": {
-        "gemelli":       "gemellifilm.com",
-        "green_apple":   "greenappleentertainment.com",
-        "vision_films":  "visionfilms.net",
+        "gemelli":       "gemellifilm.com",      # Brandfetch may not have small indie
+        "green_apple":   "greenappleent.com",   # was greenappleentertainment.com
+        "vision_films":  "visionfilms.com",     # trying .com; .net didn’t return logo
     }
 }
 
@@ -134,7 +134,7 @@ LOGOS = {
 #         "foundation":            "foundation-distribution.com",
 #         "gemelli":               "gemellifilm.com",
 #         "giant_entertainment":   "giantpictures.com",
-#         "green_apple":           "greenappleentertainment.com",
+#         "green_apple":           "greenappleent.com",
 #         "imagicomm":             "imagicomm.com",
 #         "indie_rights":          "indierights.com",
 #         "lionsgate":             "lionsgate.com",
@@ -153,7 +153,7 @@ LOGOS = {
 #         "tesera_entertainment":  "teseraentertainment.com",
 #         "tricoast":              "tricoast.com",
 #         "video_elephant":        "videoelephant.com",
-#         "vision_films":          "visionfilms.net",
+#         "vision_films":          "visionfilms.com",
 #         "wonderphil":            "wonderphil.biz",
 #     }
 # }
