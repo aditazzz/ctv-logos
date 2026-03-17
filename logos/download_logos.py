@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 Clean logo downloader using Brandfetch API.
-All logos come pre-transparent. We just convert to black.
-Get your free API key at: brandfetch.com/developers
+Outputs both BLACK and WHITE versions (800–1000px) for use on light/dark backgrounds.
+Solid color + transparent = easy to tweak opacity. Get your key at: brandfetch.com/developers
 """
 
 import os, re, zipfile
@@ -12,9 +12,22 @@ import requests
 from PIL import Image
 from io import BytesIO
 
-API_KEY = os.environ.get("BRANDFETCH_API_KEY", "").strip() or None  # set env or paste key below
-if not API_KEY:
-    API_KEY = "PASTE_YOUR_KEY_HERE"  # or get free key at brandfetch.com/developers
+def _load_api_key():
+    key = os.environ.get("BRANDFETCH_API_KEY", "").strip() or None
+    if key:
+        return key
+    # Try key file next to this script (gitignored)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    key_file = os.path.join(script_dir, ".brandfetch_key")
+    if os.path.isfile(key_file):
+        with open(key_file) as f:
+            key = (f.readline() or "").strip()
+            if key:
+                return key
+    return "PASTE_YOUR_KEY_HERE"
+
+
+API_KEY = _load_api_key()
 
 LOGOS = {
     "AdTech": {
@@ -60,33 +73,53 @@ LOGOS = {
 }
 
 OUT = "CTV_Logos"
+MAX_SIZE = 1000   # max width/height in px (800–1000 ideal for decks)
 HEADERS = {"Authorization": f"Bearer {API_KEY}"} if API_KEY else {}
 
 
-def to_black_png(data: bytes) -> Optional[bytes]:
-    """Convert any PNG to solid black on transparent background."""
+def _recolor_png(data: bytes, color: tuple) -> Optional[bytes]:
+    """Convert PNG to solid (r,g,b) on transparent; max dimension MAX_SIZE."""
     img = Image.open(BytesIO(data)).convert("RGBA")
     pixels = list(img.getdata())
-    # Check result isn't empty
     visible = sum(1 for p in pixels if p[3] > 10)
     if visible < len(pixels) * 0.005:
         return None
-    new_pixels = [(0, 0, 0, p[3]) if p[3] > 10 else (0, 0, 0, 0) for p in pixels]
+    r, g, b = color
+    new_pixels = [(r, g, b, p[3]) if p[3] > 10 else (0, 0, 0, 0) for p in pixels]
     img.putdata(new_pixels)
-    img.thumbnail((800, 800))
+    img.thumbnail((MAX_SIZE, MAX_SIZE))
     buf = BytesIO()
     img.save(buf, "PNG")
     return buf.getvalue()
 
 
-def to_black_svg(data: bytes) -> bytes:
-    """Replace all colors in SVG with black."""
+def to_black_png(data: bytes) -> Optional[bytes]:
+    return _recolor_png(data, (0, 0, 0))
+
+
+def to_white_png(data: bytes) -> Optional[bytes]:
+    return _recolor_png(data, (255, 255, 255))
+
+
+def _recolor_svg(data: bytes, hex_color: str) -> bytes:
+    """Replace fills/strokes in SVG with given hex color."""
     svg = data.decode("utf-8", errors="replace")
-    svg = re.sub(r'fill\s*=\s*"(?!none)[^"]*"',   'fill="#000000"',   svg)
-    svg = re.sub(r'fill\s*:\s*(?!none)[^;}"]+',    'fill:#000000',     svg)
-    svg = re.sub(r'stroke\s*=\s*"(?!none)[^"]*"',  'stroke="#000000"', svg)
-    svg = re.sub(r'stop-color\s*:\s*[^;}"]+',       'stop-color:#000000', svg)
+    svg = re.sub(r'fill\s*=\s*"(?!none)[^"]*"',   f'fill="{hex_color}"',   svg)
+    svg = re.sub(r'fill\s*:\s*(?!none)[^;}"]+',    f'fill:{hex_color}',     svg)
+    svg = re.sub(r'stroke\s*=\s*"(?!none)[^"]*"',  f'stroke="{hex_color}"', svg)
+    svg = re.sub(r'stop-color\s*:\s*[^;}"]+',       f'stop-color:{hex_color}', svg)
     return svg.encode("utf-8")
+
+
+def to_black_svg(data: bytes) -> bytes:
+    return _recolor_svg(data, "#000000")
+
+
+def to_white_svg(data: bytes) -> bytes:
+    return _recolor_svg(data, "#FFFFFF")
+
+
+_api_error_shown = False
 
 
 def fetch_logo(domain: str):
@@ -94,9 +127,20 @@ def fetch_logo(domain: str):
     Call Brandfetch API, return (ext, data) where ext is 'svg' or 'png'.
     Prefers SVG, falls back to PNG.
     """
+    global _api_error_shown
     url = f"https://api.brandfetch.io/v2/brands/{domain}"
-    r = requests.get(url, headers=HEADERS, timeout=15)
+    try:
+        r = requests.get(url, headers=HEADERS, timeout=15)
+    except Exception as e:
+        if not _api_error_shown:
+            _api_error_shown = True
+            print(f"\n  [API error] Request failed: {e}")
+        return None, None
     if r.status_code != 200:
+        if not _api_error_shown:
+            _api_error_shown = True
+            msg = (r.text or "")[:300]
+            print(f"\n  [API] Brandfetch returned HTTP {r.status_code}: {msg}")
         return None, None
 
     brand = r.json()
@@ -131,7 +175,10 @@ def fetch_logo(domain: str):
 
 def main():
     if not API_KEY or API_KEY == "PASTE_YOUR_KEY_HERE":
-        print("Set BRANDFETCH_API_KEY or edit API_KEY in this script. Get a key at: brandfetch.com/developers")
+        print("No API key found. Use one of:")
+        print("  1. export BRANDFETCH_API_KEY='your_key'")
+        print("  2. Put your key in logos/.brandfetch_key (one line, no quotes)")
+        print("Get a free key at: brandfetch.com/developers")
         raise SystemExit(1)
     # Clean start
     import shutil
@@ -141,8 +188,10 @@ def main():
     failed = []
 
     for category, brands in LOGOS.items():
-        folder = os.path.join(OUT, category)
-        os.makedirs(folder, exist_ok=True)
+        black_folder = os.path.join(OUT, "Black", category)
+        white_folder = os.path.join(OUT, "White", category)
+        os.makedirs(black_folder, exist_ok=True)
+        os.makedirs(white_folder, exist_ok=True)
 
         for name, domain in brands.items():
             print(f"  {name} ({domain})...", end=" ", flush=True)
@@ -155,22 +204,25 @@ def main():
                 continue
 
             if ext == "svg":
-                final = to_black_svg(data)
-                path = os.path.join(folder, f"{name}.svg")
-                with open(path, "wb") as f:
-                    f.write(final)
-                print("✓ SVG")
-
-            else:  # png
-                final = to_black_png(data)
-                if not final:
+                ext_name = "svg"
+                black_data = to_black_svg(data)
+                white_data = to_white_svg(data)
+            else:
+                ext_name = "png"
+                black_data = to_black_png(data)
+                white_data = to_white_png(data) if black_data else None
+                if not black_data:
                     print("✗ empty after processing")
                     failed.append(name)
                     continue
-                path = os.path.join(folder, f"{name}.png")
-                with open(path, "wb") as f:
-                    f.write(final)
-                print("✓ PNG")
+
+            # Write both versions
+            with open(os.path.join(black_folder, f"{name}.{ext_name}"), "wb") as f:
+                f.write(black_data)
+            if white_data:
+                with open(os.path.join(white_folder, f"{name}.{ext_name}"), "wb") as f:
+                    f.write(white_data)
+            print("✓ B+W" if white_data else "✓ black only")
 
     # ZIP
     zip_path = f"{OUT}.zip"

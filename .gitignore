@@ -1,7 +1,9 @@
-# API key (use env var BRANDFETCH_API_KEY instead)
+# API key (env BRANDFETCH_API_KEY or logos/.brandfetch_key)
 .env
 .env.local
 *.env
+logos/.brandfetch_key
+.brandfetch_key
 
 # Python
 __pycache__/
