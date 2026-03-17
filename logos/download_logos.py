@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 Clean logo downloader using Brandfetch API.
-Outputs both BLACK and WHITE versions (800–1000px) for use on light/dark backgrounds.
-Solid color + transparent = easy to tweak opacity. Get your key at: brandfetch.com/developers
+Outputs BLACK, WHITE, and COLOR versions (max 1000px). B/W for light/dark backgrounds; color for brand-accurate use.
+Get your key at: brandfetch.com/developers
 """
 
 import os, re, zipfile
@@ -101,6 +101,18 @@ def to_white_png(data: bytes) -> Optional[bytes]:
     return _recolor_png(data, (255, 255, 255))
 
 
+def to_color_png(data: bytes) -> Optional[bytes]:
+    """Keep original colors; only resize to max MAX_SIZE."""
+    img = Image.open(BytesIO(data)).convert("RGBA")
+    visible = sum(1 for p in img.getdata() if p[3] > 10)
+    if visible < img.size[0] * img.size[1] * 0.005:
+        return None
+    img.thumbnail((MAX_SIZE, MAX_SIZE))
+    buf = BytesIO()
+    img.save(buf, "PNG")
+    return buf.getvalue()
+
+
 def _recolor_svg(data: bytes, hex_color: str) -> bytes:
     """Replace fills/strokes in SVG with given hex color."""
     svg = data.decode("utf-8", errors="replace")
@@ -190,8 +202,10 @@ def main():
     for category, brands in LOGOS.items():
         black_folder = os.path.join(OUT, "Black", category)
         white_folder = os.path.join(OUT, "White", category)
+        color_folder = os.path.join(OUT, "Color", category)
         os.makedirs(black_folder, exist_ok=True)
         os.makedirs(white_folder, exist_ok=True)
+        os.makedirs(color_folder, exist_ok=True)
 
         for name, domain in brands.items():
             print(f"  {name} ({domain})...", end=" ", flush=True)
@@ -207,22 +221,27 @@ def main():
                 ext_name = "svg"
                 black_data = to_black_svg(data)
                 white_data = to_white_svg(data)
+                color_data = data  # original colors
             else:
                 ext_name = "png"
                 black_data = to_black_png(data)
                 white_data = to_white_png(data) if black_data else None
+                color_data = to_color_png(data) if black_data else None
                 if not black_data:
                     print("✗ empty after processing")
                     failed.append(name)
                     continue
 
-            # Write both versions
+            # Write Black, White, Color
             with open(os.path.join(black_folder, f"{name}.{ext_name}"), "wb") as f:
                 f.write(black_data)
             if white_data:
                 with open(os.path.join(white_folder, f"{name}.{ext_name}"), "wb") as f:
                     f.write(white_data)
-            print("✓ B+W" if white_data else "✓ black only")
+            if color_data:
+                with open(os.path.join(color_folder, f"{name}.{ext_name}"), "wb") as f:
+                    f.write(color_data)
+            print("✓ B+W+C" if white_data and color_data else "✓")
 
     # ZIP
     zip_path = f"{OUT}.zip"

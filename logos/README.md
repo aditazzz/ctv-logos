@@ -1,6 +1,6 @@
 # CTV / Streaming & Ad Tech Logos
 
-**35 brand logos** — fetched via the **Brandfetch API**, output as **black and white** on transparent (SVG or PNG), max 1000px, in **Black/** and **White/** folder sets.
+**35 brand logos** — fetched via the **Brandfetch API**, output as **Black**, **White**, and **Color** (SVG or PNG), max 1000px.
 
 ---
 
@@ -12,7 +12,7 @@
 | **Streaming** (18) | Sling, Prime, Philo, LG Channels, Anoki, Local Now, Fubo, Roku Channel, Plex, Tubi, Tablo, YouTube TV VOD, TRC, Pluto, DirecTV, TiVo, Freecast |
 | **TV / devices** (8) | VIZIO Watch Free, HP, Whale, Vidaa, Hisense, TCL, Rakuten, LG |
 
-Output is **CTV_Logos/Black/** and **CTV_Logos/White/** (each with AdTech, StreamingPlatforms, TVPlatforms). Max dimension 1000px so they work on light/dark backgrounds and opacity can be adjusted.
+Output is **CTV_Logos/Black/**, **CTV_Logos/White/**, and **CTV_Logos/Color/** (each with AdTech, StreamingPlatforms, TVPlatforms). Max dimension 1000px.
 
 ---
 
@@ -26,7 +26,7 @@ Output is **CTV_Logos/Black/** and **CTV_Logos/White/** (each with AdTech, Strea
    python download_logos.py
    ```
 4. **Output**
-   - Folder: `CTV_Logos/Black/` and `CTV_Logos/White/` (each with AdTech, StreamingPlatforms, TVPlatforms). Logos are max 1000px.
+   - Folders: `CTV_Logos/Black/`, `CTV_Logos/White/`, `CTV_Logos/Color/` (each with AdTech, StreamingPlatforms, TVPlatforms). Max 1000px.
    - Zip: `CTV_Logos.zip` — same structure for easy sharing.
 
 **Requirements:** Python 3.9+, `requests`, `Pillow` (see `requirements.txt`).
