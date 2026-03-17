@@ -3,13 +3,28 @@
 Clean logo downloader using Brandfetch API.
 Outputs BLACK, WHITE, and COLOR versions (max 1000px). B/W for light/dark backgrounds; color for brand-accurate use.
 Get your key at: brandfetch.com/developers
+
+Run with the project venv (so requests/Pillow are available):
+  ../.venv/bin/python download_logos.py   (from logos/)
+  or:  /path/to/RLJ2/.venv/bin/python /path/to/RLJ2/logos/download_logos.py
 """
 
-import os, re, zipfile
+import os
+import re
+import zipfile
 from typing import Optional
 
-import requests
-from PIL import Image
+try:
+    import requests
+    from PIL import Image
+except ImportError as e:
+    print("Missing dependency:", e)
+    print("\nRun with the project venv (from RLJ2 folder):")
+    print("  ./logos/run.sh")
+    print("or:")
+    print("  .venv/bin/python logos/download_logos.py")
+    raise SystemExit(1)
+
 from io import BytesIO
 
 def _load_api_key():
@@ -29,48 +44,119 @@ def _load_api_key():
 
 API_KEY = _load_api_key()
 
+# --- CTV / streaming / ad tech (commented out) ---
+# LOGOS = {
+#     "AdTech": {
+#         "cineverse":    "cineverse.com",
+#         "infillion":    "infillion.com",
+#         "wurl":         "wurl.com",
+#         "frequency":    "frequency.com",
+#         "justwatch":    "justwatch.com",
+#         "gumgum":       "gumgum.com",
+#         "kargo":        "kargo.com",
+#         "canvasspace":  "canvas.space",
+#         "magnite":      "magnite.com",
+#     },
+#     "StreamingPlatforms": {
+#         "sling":        "sling.com",
+#         "primevideo":   "primevideo.com",
+#         "philo":        "philo.com",
+#         "lgchannels":   "lgchannels.com",
+#         "anoki":        "anoki.ai",
+#         "localnow":     "localnow.com",
+#         "fubo":         "fubo.tv",
+#         "roku":         "roku.com",
+#         "plex":         "plex.tv",
+#         "tubi":         "tubi.tv",
+#         "tablo":        "tablotv.com",
+#         "youtube":      "youtube.com",
+#         "trc":          "trc.com",
+#         "pluto":        "pluto.tv",
+#         "directv":      "directv.com",
+#         "tivo":         "tivo.com",
+#         "freecast":     "freecast.com",
+#     },
+#     "TVPlatforms": {
+#         "vizio":        "vizio.com",
+#         "hp":           "hp.com",
+#         "whale":        "whale.io",
+#         "vidaa":        "vidaa.com",
+#         "hisense":      "hisense.com",
+#         "tcl":          "tcl.com",
+#         "rakuten":      "rakuten.com",
+#         "lg":           "lg.com",
+#     }
+# }
+
+# --- Only the 13 that failed (alternate domains) — comment in to fill gaps without using quota on the rest ---
+# LOGOS = {
+#     "Entertainment": {
+#         "artist_view":           "artistviewent.com",
+#         "brain_power":           "brainpowerstudio.com",
+#         "dlt_entertainment":     "dltentertainment.com",
+#         "echelon":               "echelonstudios.us",
+#         "epic_pictures":         "epic-pictures.com",
+#         "foundation":            "foundation-distribution.com",
+#         "gemelli":               "gemellifilm.com",
+#         "giant_entertainment":   "giantpictures.com",
+#         "green_apple":           "greenappleentertainment.com",
+#         "one_world_digital":     "oneworld.digital",
+#         "questar":               "questarentertainment.com",
+#         "vision_films":          "visionfilms.net",
+#         "wonderphil":            "wonderphil.biz",
+#     }
+# }
+
+# --- Only the 3 still missing (run this to append without touching existing logos) ---
 LOGOS = {
-    "AdTech": {
-        "cineverse":    "cineverse.com",
-        "infillion":    "infillion.com",
-        "wurl":         "wurl.com",
-        "frequency":    "frequency.com",
-        "justwatch":    "justwatch.com",
-        "gumgum":       "gumgum.com",
-        "kargo":        "kargo.com",
-        "canvasspace":  "canvas.space",      # https://canvas.space/
-        "magnite":      "magnite.com",       # SpringServe/Magnite
-    },
-    "StreamingPlatforms": {
-        "sling":        "sling.com",
-        "primevideo":   "primevideo.com",   # Prime
-        "philo":        "philo.com",
-        "lgchannels":   "lgchannels.com",    # LG Channels
-        "anoki":        "anoki.ai",
-        "localnow":     "localnow.com",
-        "fubo":         "fubo.tv",
-        "roku":         "roku.com",          # The Roku Channel
-        "plex":         "plex.tv",
-        "tubi":         "tubi.tv",
-        "tablo":        "tablotv.com",
-        "youtube":      "youtube.com",       # YouTube TV VOD
-        "trc":          "trc.com",          # TRC – confirm domain
-        "pluto":        "pluto.tv",
-        "directv":      "directv.com",       # DirecTV
-        "tivo":         "tivo.com",
-        "freecast":     "freecast.com",
-    },
-    "TVPlatforms": {
-        "vizio":        "vizio.com",         # VIZIO Watch Free
-        "hp":           "hp.com",
-        "whale":        "whale.io",          # or confirm domain
-        "vidaa":        "vidaa.com",         # Vidaa Hisense
-        "hisense":      "hisense.com",
-        "tcl":          "tcl.com",
-        "rakuten":      "rakuten.com",
-        "lg":           "lg.com",            # LG (Channels is in Streaming)
+    "Entertainment": {
+        "gemelli":       "gemellifilm.com",
+        "green_apple":   "greenappleentertainment.com",
+        "vision_films":  "visionfilms.net",
     }
 }
+
+# --- Full list (commented out; uncomment to re-fetch all 36) ---
+# LOGOS = {
+#     "Entertainment": {
+#         "airbud_entertainment":   "airbudentertainment.com",
+#         "alliance_media":        "alliancemedia.com",
+#         "artist_view":           "artistviewent.com",
+#         "bayview":               "bayview.com",
+#         "bmg":                   "bmg.com",
+#         "brain_power":           "brainpowerstudio.com",
+#         "cineverse":             "cineverse.com",
+#         "dlt_entertainment":     "dltentertainment.com",
+#         "echelon":               "echelonstudios.us",
+#         "electric_entertainment": "electricentertainment.com",
+#         "epic_pictures":         "epic-pictures.com",
+#         "filmhub":               "filmhub.com",
+#         "foundation":            "foundation-distribution.com",
+#         "gemelli":               "gemellifilm.com",
+#         "giant_entertainment":   "giantpictures.com",
+#         "green_apple":           "greenappleentertainment.com",
+#         "imagicomm":             "imagicomm.com",
+#         "indie_rights":          "indierights.com",
+#         "lionsgate":             "lionsgate.com",
+#         "monarch":               "monarch.com",
+#         "new_films_international": "newfilmsinternational.com",
+#         "nicely":                "nicely.com",
+#         "one_world_digital":     "oneworld.digital",
+#         "questar":               "questarentertainment.com",
+#         "radial_entertainment":  "radialentertainment.com",
+#         "relativity_media":      "relativitymedia.com",
+#         "shoreline":             "shorelineentertainment.com",
+#         "spi":                   "spientertainment.com",
+#         "stingray":              "stingray.com",
+#         "studio_tf1":            "tf1.fr",
+#         "tastemade":             "tastemade.com",
+#         "tesera_entertainment":  "teseraentertainment.com",
+#         "tricoast":              "tricoast.com",
+#         "video_elephant":        "videoelephant.com",
+#         "vision_films":          "visionfilms.net",
+#         "wonderphil":            "wonderphil.biz",
+#     }
+# }
 
 OUT = "CTV_Logos"
 MAX_SIZE = 1000   # max width/height in px (800–1000 ideal for decks)
@@ -153,6 +239,16 @@ def fetch_logo(domain: str):
             _api_error_shown = True
             msg = (r.text or "")[:300]
             print(f"\n  [API] Brandfetch returned HTTP {r.status_code}: {msg}")
+            if r.status_code == 429:
+                print("\n  → Quota exceeded. Brandfetch limits are per ACCOUNT, not per key — a new key on the same account won't help.")
+                print("  → Wait for the daily reset (check brandfetch.com/developers) or create a key from a different Brandfetch account.")
+                try:
+                    d = r.json()
+                    if "used" in d and "quota" in d:
+                        print(f"  → Current: used {d['used']} / quota {d['quota']}")
+                except Exception:
+                    pass
+                raise SystemExit(1)
         return None, None
 
     brand = r.json()
@@ -186,17 +282,13 @@ def fetch_logo(domain: str):
 
 
 def main():
-    if not API_KEY or API_KEY == "PASTE_YOUR_KEY_HERE":
+    if not API_KEY or API_KEY == "pdXQxPHyfTLTdQ_qSXbn9gDKLymfCLAx_rPrikr0k9hgIz4-hw9nD49Qq4WIMiW9-ACEM8ao-6bxdA4NaZQ4ng":
         print("No API key found. Use one of:")
         print("  1. export BRANDFETCH_API_KEY='your_key'")
         print("  2. Put your key in logos/.brandfetch_key (one line, no quotes)")
         print("Get a free key at: brandfetch.com/developers")
         raise SystemExit(1)
-    # Clean start
-    import shutil
-    if os.path.exists(OUT):
-        shutil.rmtree(OUT)
-
+    # No longer wiping OUT — each run adds/overwrites only the logos in LOGOS (keeps existing files)
     failed = []
 
     for category, brands in LOGOS.items():
