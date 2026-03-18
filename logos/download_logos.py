@@ -169,24 +169,55 @@ MAX_SIZE = 1000   # max width/height in px (800–1000 ideal for decks)
 HEADERS = {"Authorization": f"Bearer {API_KEY}"} if API_KEY else {}
 
 
+def _img_pixels_rgba(img: "Image.Image") -> list:
+    """Pixel list (r,g,b,a) per pixel. Uses get_flattened_data on Pillow 10+ to avoid getdata deprecation."""
+    if hasattr(img, "get_flattened_data"):
+        flat = img.get_flattened_data()
+        # get_flattened_data() returns a sequence of (r,g,b,a) per pixel, not flat bytes
+        return list(flat)
+    return list(img.getdata())
+
+
 def _recolor_png(data: bytes, color: tuple) -> Optional[bytes]:
     """Convert PNG to solid (r,g,b) on transparent; max dimension MAX_SIZE.
-    Uses luminance so only the logo shape (lighter pixels) is kept; dark backgrounds become transparent (avoids black boxes).
+    Detects light-background (black-on-white) vs dark-background (white-on-dark) and keeps
+    the logo shape either way so dark backgrounds become transparent (avoids black boxes).
     """
     img = Image.open(BytesIO(data)).convert("RGBA")
-    pixels = list(img.getdata())
+    pixels = _img_pixels_rgba(img)
     r, g, b = color
+    # Detect background: median luminance of opaque pixels
+    opaque_lums = [
+        int(0.299 * pr + 0.587 * pg + 0.114 * pb)
+        for (pr, pg, pb, pa) in pixels
+        if pa > 10
+    ]
+    light_bg = False
+    if len(opaque_lums) >= 10:
+        median_lum = sorted(opaque_lums)[len(opaque_lums) // 2]
+        light_bg = median_lum > 140  # mostly white/light -> logo is dark
+
     new_pixels = []
     for p in pixels:
         pr, pg, pb, pa = p
-        # Luminance: light pixels = logo, dark = background
         lum = int(0.299 * pr + 0.587 * pg + 0.114 * pb)
-        if pa > 10 and lum > 25:
-            # Keep logo shape: scale alpha by luminance so edges are soft
-            new_a = min(255, int(pa * (lum / 255)))
-            new_pixels.append((r, g, b, new_a))
-        else:
+        if pa <= 10:
             new_pixels.append((0, 0, 0, 0))
+            continue
+        if light_bg:
+            # Logo is dark pixels; keep dark, make light transparent
+            if lum < 230:
+                new_a = min(255, int(pa * (255 - lum) / 255))
+                new_pixels.append((r, g, b, new_a))
+            else:
+                new_pixels.append((0, 0, 0, 0))
+        else:
+            # Logo is light pixels; keep light, make dark transparent
+            if lum > 25:
+                new_a = min(255, int(pa * (lum / 255)))
+                new_pixels.append((r, g, b, new_a))
+            else:
+                new_pixels.append((0, 0, 0, 0))
     visible = sum(1 for p in new_pixels if p[3] > 10)
     if visible < len(pixels) * 0.005:
         return None
@@ -208,7 +239,7 @@ def to_white_png(data: bytes) -> Optional[bytes]:
 def to_color_png(data: bytes) -> Optional[bytes]:
     """Keep original colors; only resize to max MAX_SIZE."""
     img = Image.open(BytesIO(data)).convert("RGBA")
-    visible = sum(1 for p in img.getdata() if p[3] > 10)
+    visible = sum(1 for p in _img_pixels_rgba(img) if p[3] > 10)
     if visible < img.size[0] * img.size[1] * 0.005:
         return None
     img.thumbnail((MAX_SIZE, MAX_SIZE))
@@ -327,6 +358,7 @@ def main():
                 failed.append(name)
                 continue
 
+            status_printed = False
             if ext == "svg":
                 ext_name = "svg"
                 black_data = to_black_svg(data)
@@ -336,11 +368,16 @@ def main():
                 ext_name = "png"
                 black_data = to_black_png(data)
                 white_data = to_white_png(data) if black_data else None
-                color_data = to_color_png(data) if black_data else None
+                color_data = to_color_png(data)
                 if not black_data:
-                    print("✗ empty after processing")
-                    failed.append(name)
-                    continue
+                    # Recolor produced nothing (e.g. odd luminance); keep color in all three so we don't lose the logo
+                    if color_data:
+                        black_data = white_data = color_data
+                        status_printed = True
+                    else:
+                        print("✗ empty after processing")
+                        failed.append(name)
+                        continue
 
             # Write Black, White, Color
             with open(os.path.join(black_folder, f"{name}.{ext_name}"), "wb") as f:
@@ -351,7 +388,10 @@ def main():
             if color_data:
                 with open(os.path.join(color_folder, f"{name}.{ext_name}"), "wb") as f:
                     f.write(color_data)
-            print("✓ B+W+C" if white_data and color_data else "✓")
+            if not status_printed:
+                print("✓ B+W+C" if (white_data and color_data) else "✓")
+            else:
+                print("✓ color only (B/W empty)")
 
     # ZIP
     zip_path = f"{OUT}.zip"
